@@ -12,6 +12,5 @@ namespace ApplicationAuth.Services.Interfaces.Telegram
 {
     public interface ITelegramService
     {
-        public Task<SaldoResponseModel> GetSaldo(string telegramId);
     }
 }

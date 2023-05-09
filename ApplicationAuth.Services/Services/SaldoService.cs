@@ -1,6 +1,8 @@
 ﻿using ApplicationAuth.Common.Constants;
+using ApplicationAuth.Common.Exceptions;
 using ApplicationAuth.DAL.Abstract;
 using ApplicationAuth.Domain.Entities.Identity;
+using ApplicationAuth.Domain.Entities.Saldo;
 using ApplicationAuth.Models.ResponseModels.Saldo;
 using ApplicationAuth.Services.Interfaces;
 using AutoMapper;
@@ -28,23 +30,29 @@ namespace ApplicationAuth.Services.Services
             _unitOfWork = unitOfWork;
             _mapper = mapper;   
         }
-        public async Task<SaldoResponseModel> Get(string telegramId)
+
+        public async Task<string> DeleteSaldo(ApplicationUser user)
         {
-            //var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == telegramId)
-              //                                                  .Include(w => w.Saldo)
-                //                                                .FirstOrDefault();
+            _unitOfWork.Repository<SaldoProfile>().Delete(user.Saldo);
+            _unitOfWork.SaveChanges();
+            return $"{user.TelegramId}_Saldo було видалено!";
+        }
+
+
+        public async Task<SaldoResponseModel> Get(ApplicationUser user)
+        {
             using (IWebDriver driver = new ChromeDriver()) 
             {
                 driver.Url = Saldo.Base;
-                driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(/*user.Saldo.AccountNumber*/ "9690033280");
-                driver.FindElement(By.XPath("//input[@id='mainform:password']")).SendKeys("8772");
+                driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
+                driver.FindElement(By.XPath("//input[@id='mainform:password']")).SendKeys(user.Saldo.SecureCode);
                 driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
-                await Task.Delay(1000);
                 var balance = driver.FindElement(By.XPath("//td[contains(.,'€')]")).GetAttribute("textContent");
                 balance = Regex.Replace(balance, @"[ \r\n\t]", "").TrimStart().Replace("€", "").Replace(" ", "");
                 balance = Regex.Replace(balance, @"\s+", String.Empty);
-                //user.Saldo.Balance = double.Parse(balance.Substring(1, balance.Length));
-                return new SaldoResponseModel() { AccountNumber = "9690033280", Balance = double.Parse(balance, CultureInfo.InvariantCulture), Status=true};
+                user.Saldo.Balance = double.Parse(balance, CultureInfo.InvariantCulture);
+                _unitOfWork.SaveChanges();
+                return new SaldoResponseModel() { AccountNumber = user.Saldo.AccountNumber, Balance = double.Parse(balance, CultureInfo.InvariantCulture), Status=true};
             }
         }
     }

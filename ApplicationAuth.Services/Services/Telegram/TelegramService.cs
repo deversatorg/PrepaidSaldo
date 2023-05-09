@@ -38,10 +38,5 @@ namespace ApplicationAuth.Services.Services.Telegram
             _accountService = accountService;
             _saldoService = saldoService;
         }
-        public async Task<SaldoResponseModel> GetSaldo(string telegramId) 
-        {
-            var response = await _saldoService.Get(telegramId);
-            return response;
-        }
     } 
 }

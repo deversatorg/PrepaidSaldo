@@ -85,28 +85,6 @@ namespace ApplicationAuth.Controllers.API
             return Json(new JsonResponse<LoginResponseModel>(result));
         }
 
-        // GET api/v1/test/saldo
-        /// <summary>
-        /// Get balance 
-        /// </summary>
-        /// <remarks>
-        /// Sample request:
-        ///
-        ///     DELETE api/v1/test/DeleteAccount?userid=1
-        ///
-        /// </remarks>
-        /// <returns>HTTP 200 with success message or HTTP 40X, 500 with message error</returns>
-        [HttpGet("saldo")]
-        [SwaggerResponse(200, ResponseMessages.RequestSuccessful, typeof(JsonResponse<MessageResponseModel>))]
-        [SwaggerResponse(400, ResponseMessages.InvalidData, typeof(ErrorResponseModel))]
-        [SwaggerResponse(401, ResponseMessages.Unauthorized, typeof(ErrorResponseModel))]
-        [SwaggerResponse(403, ResponseMessages.Forbidden, typeof(ErrorResponseModel))]
-        [SwaggerResponse(500, ResponseMessages.InternalServerError, typeof(ErrorResponseModel))]
-        public async Task<IActionResult> DeleteAccount([FromQuery]string telegramId)
-        {
-            var response = await _saldoService.Get(telegramId);
-            return Json(new JsonResponse<SaldoResponseModel>(response));
-        }
 
         // DELETE api/v1/test/DeleteAccount
         /// <summary>

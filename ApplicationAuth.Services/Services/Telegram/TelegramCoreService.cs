@@ -1,13 +1,20 @@
 ﻿using ApplicationAuth.Common.Configs;
+using ApplicationAuth.Common.Constants.Telegram;
 using ApplicationAuth.DAL.Abstract;
 using ApplicationAuth.Domain.Entities.Identity;
 using ApplicationAuth.Domain.Entities.Saldo;
+using ApplicationAuth.Domain.Entities.Telegram;
+using ApplicationAuth.Domain.State;
+using ApplicationAuth.Models.RequestModels.Saldo;
 using ApplicationAuth.Models.RequestModels.Telegram;
 using ApplicationAuth.Services.Interfaces;
 using ApplicationAuth.Services.Interfaces.Telegram;
 using Microsoft.Bot.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using OpenQA.Selenium.DevTools.V111.Fetch;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,6 +27,7 @@ using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace ApplicationAuth.Services.Services.Telegram
 {
@@ -29,10 +37,16 @@ namespace ApplicationAuth.Services.Services.Telegram
         private readonly IAccountService _accountService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IConfiguration _configuration;
+        private readonly IStateFactory _stateFactory;
+        private readonly ICacheService _cacheService;
+        private readonly ISaldoService _saldoService;
         public TelegramCoreService(IConfiguration configuration,
                                    ITelegramService telegramService,
                                    IAccountService accountService,
-                                   IUnitOfWork unitOfWork
+                                   IUnitOfWork unitOfWork,
+                                   IStateFactory stateFactory,
+                                   ICacheService cacheService,
+                                   ISaldoService saldoService
                                    )
         {
 
@@ -41,6 +55,9 @@ namespace ApplicationAuth.Services.Services.Telegram
             _accountService = accountService;
             _unitOfWork = unitOfWork;
             _configuration = configuration;
+            _stateFactory = stateFactory;
+            _cacheService = cacheService;
+            _saldoService = saldoService;
         }
 
         public async Task<Message> SendMessage(ITelegramBotClient client ,long chatId, string text, IReplyMarkup? replyMarkup = null)
@@ -56,8 +73,10 @@ namespace ApplicationAuth.Services.Services.Telegram
             }
         }
 
+        
 
-        public async Task<Message> RegisterSaldo(ITelegramBotClient client,Message message) 
+        #region Saldo
+        public async Task<Message> RegisterSaldo(ITelegramBotClient client, Message message)
         {
             //9690033280
             //8772
@@ -65,39 +84,103 @@ namespace ApplicationAuth.Services.Services.Telegram
                                                                 .Include(w => w.Saldo)
                                                                 .FirstOrDefault();
             if (user.Saldo != null)
-                return await SendMessage(client, message.Chat.Id, "Ви вже додали профіль Saldo", replyMarkup: _mainMenu());
+                return await SendMessage(client, message.Chat.Id, "Ви вже додали профіль Saldo", replyMarkup: ReplyMarkups.MainMenu());
 
-            var saldo = new SaldoProfile();
+            // Если регистрация уже в процессе, обрабатываем ответ пользователя
+            var userState = _cacheService.Get<IState<SaldoRequestModel>>($"registerSaldo_{message.From.Id}");
+            if (userState == null)
+            {
+                // Новый пользователь, создаем экземпляр UserState и сохраняем его в кэше
+                userState = _stateFactory.State<SaldoRequestModel>();
+                userState.CurrentStep = 1;
+                userState.Id = message.From.Id;
+                userState.CountOfSteps = 2;
+                userState.Type = Models.Enums.DialogType.SaldoRegistration;
 
-            var response = await client.SendTextMessageAsync(message.Chat.Id, "Введіть номер картки:", replyMarkup: new ForceReplyMarkup());
-            saldo.AccountNumber = await PollForUserInput(client, message, response, "Невірний формат номера! ", 10);
+               _cacheService.Set($"registerSaldo_{message.From.Id}", userState, DateTimeOffset.UtcNow.AddMinutes(5));
+            }
+            else 
+            {
+                // Обрабатываем ответ в зависимости от текущего состояния диалога
+                switch (userState.CurrentStep)
+                {
+                    case 1:
+                        if (message.Text.Length != 10) 
+                        {
+                            _cacheService.Remove($"registerSaldo_{message.From.Id}");
+                            return await client.SendTextMessageAsync(message.Chat.Id, "Невірний формат номера! Код має містити 10 цифр", replyMarkup: ReplyMarkups.MainMenu());
+                        }
 
-            response = await client.SendTextMessageAsync(message.Chat.Id, "Введіть секретний номер:", replyMarkup: new ForceReplyMarkup());
-            saldo.SecureCode = await PollForUserInput(client, message, response, "Невірний формат кода!", 4);
+                        userState.Model.CardNumber = message.Text;
 
-            if (saldo.AccountNumber == null || saldo.SecureCode == null)
-                return await SendMessage(client, message.Chat.Id, "Помилка! Перевірте правильність написанних вами даних", _mainMenu());
+                        userState.CurrentStep = 2; // Переходим к следующему шагу
+                        _cacheService.Set($"registerSaldo_{message.From.Id}", userState, DateTimeOffset.UtcNow.AddMinutes(10));
+                        return await client.SendTextMessageAsync(message.Chat.Id, "Введіть секретний номер:", replyMarkup: new ForceReplyMarkup());
+                    case 2:
+                        if (message.Text.Length != 4)     
+                        {
+                            _cacheService.Remove($"registerSaldo_{message.From.Id}");
+                            return await client.SendTextMessageAsync(message.Chat.Id, "Невірний формат кода! Код має містити 4 цифри", replyMarkup: ReplyMarkups.MainMenu());
+                        }
 
-            _unitOfWork.SaveChanges();
+                        userState.Model.SecretCode = message.Text;
+                        // В этом месте можно сохранить данные в базе данных или выполнять другие операции с полученной информацией
+                        user.Saldo = new SaldoProfile() { AccountNumber = userState.Model.CardNumber, SecureCode = userState.Model.SecretCode };
+                        _unitOfWork.SaveChanges();
+                        // userState.CardNumber и userState.SecretCode содержат введенные данные
+                        _cacheService.Remove($"registerSaldo_{message.From.Id}"); // Удаляем запись из кэша
+                        return await SendMessage(client, message.Chat.Id, "Успіша регістрація", replyMarkup: ReplyMarkups.MainMenu(true));
+                    default:
+                        return await SendMessage(client, message.Chat.Id, "Помилка! Спробуйте ще раз", replyMarkup: ReplyMarkups.MainMenu());
 
-            return await SendMessage(client, message.Chat.Id, "Успіша регістрація", _mainMenu());
+                }
+            }
+
+            // Запрос номера карты
+            return await client.SendTextMessageAsync(message.Chat.Id, "Введіть номер картки:", replyMarkup: new ForceReplyMarkup());
+
         }
 
         public async Task<Message> GetBalance(ITelegramBotClient client, Message message)
         {
-            var response = await _telegramService.GetSaldo(message.From.Id.ToString());
+            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == message.From.Id.ToString())
+                                                                .Include(w => w.Saldo)
+                                                                .FirstOrDefault();
+            if (user.Saldo == null)
+                return await SendMessage(client, message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
+            var response = await _saldoService.Get(user);
 
             if (response.Status)
-                return await SendMessage(client, message.Chat.Id, $"Ваш Saldo Профіль \n Номер картки: {response.AccountNumber} \n Баланс: {response.Balance} \n Статус картки: Активний", replyMarkup: _inlineMenu());
+                return await SendMessage(client, message.Chat.Id, $"Ваш Saldo Профіль \n Номер картки: {response.AccountNumber} \n Баланс: {response.Balance} \n Статус картки: Активний", replyMarkup: ReplyMarkups.InlineMenu());
 
-            return await SendMessage(client, message.Chat.Id, $"Ваш Saldo Профіль \n Номер картки: {response.AccountNumber} \n Баланс: {response.Balance} \n Статус картки: Неактивний", replyMarkup: _inlineMenu());
+            return await SendMessage(client, message.Chat.Id, $"Ваш Saldo Профіль \n Номер картки: {response.AccountNumber} \n Баланс: {response.Balance} \n Статус картки: Неактивний", replyMarkup: ReplyMarkups.InlineMenu());
 
 
         }
 
+        public async Task<Message> DeleteSaldo(ITelegramBotClient client, Message message) 
+        {
+            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == message.From.Id.ToString())
+                                                                .Include(w => w.Saldo)
+                                                                .FirstOrDefault();
+            var cache = _cacheService.GetAllKeyValuePairs();
+            foreach (var cacheField in cache)
+            {
+                if (cacheField.Key.ToString().Contains($"registerSaldo_{message.From.Id}"))
+                    _cacheService.Remove(cacheField.Key.ToString());
+            }
+
+            if (user.Saldo == null)
+                return await SendMessage(client, message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо так і проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
+            var response = await _saldoService.DeleteSaldo(user);
+            return await SendMessage(client, message.Chat.Id, response, replyMarkup: ReplyMarkups.MainMenu());
+
+        }
+        #endregion
+
         public async Task<Message> SendInitKeyboard(ITelegramBotClient client, Message message)
         {
-            await _accountService.Register(new TelegramUserRegisterRequestModel() { UserId = message.From.Id.ToString() });
+            var user = await _accountService.Register(new TelegramUserRegisterRequestModel() { UserId = message.From.Id.ToString() });
 
             var keyboard = new ReplyKeyboardMarkup
             (
@@ -105,12 +188,20 @@ namespace ApplicationAuth.Services.Services.Telegram
                 {
                     new List<KeyboardButton>()
                     {
-                        new KeyboardButton() {Text = "Реєстрація📝"},
+                        new KeyboardButton()
+                        {
+                            Text = user.Saldo == null?"Реєстрація📝": "Профіль👨‍💼"
+                        },
                         new KeyboardButton() {Text = "Баланс💳"},
                     },
                     new List<KeyboardButton>()
                     {
-                        new KeyboardButton() {Text = "/start"},
+                        new KeyboardButton() {Text = "Налаштування⚙️"},
+                        new KeyboardButton() {Text = "Підтримка📲"},
+                    },
+                    new List<KeyboardButton>()
+                    {
+                        new KeyboardButton() {Text = "Автор✍️"},
                     }
                 }
             )
@@ -124,73 +215,10 @@ namespace ApplicationAuth.Services.Services.Telegram
 
         }
 
-        #region Menus
-        private IReplyMarkup _inlineMenu()
+        public async Task<Message> GetProfile(ITelegramBotClient client, Message message)
         {
-            var keyboard = new InlineKeyboardMarkup
-            (
-                new List<InlineKeyboardButton>()
-                {
-                    new InlineKeyboardButton() {Text = "Головне меню", CallbackData= "/start"},
-                }
-            );
             
-            return keyboard;
-        }
-
-        private IReplyMarkup _mainMenu()
-        {
-            var keyboard = new ReplyKeyboardMarkup
-            (
-                new List<List<KeyboardButton>>()
-                {
-                    new List<KeyboardButton>()
-                    {
-                        new KeyboardButton() {Text = "Реєстрація📝"},
-                        new KeyboardButton() {Text = "Баланс💳"},
-                    },
-                    new List<KeyboardButton>()
-                    {
-                        new KeyboardButton() {Text = "/start"},
-                    }
-                }
-            )
-            {
-                ResizeKeyboard = true
-            };
-
-            return keyboard;
-        }
-        #endregion
-
-        private async Task<string> PollForUserInput(ITelegramBotClient client, Message message, Message response, string errorMessage, int expectedLength)
-        {
-            var hook = @$"{_configuration.GetSection("BotConfiguration").Get<BotConfiguration>().HostAddress}/api/bot/update";
-            await client.DeleteWebhookAsync(true);
-
-            Update[] updates;
-            while (true)
-            {
-                updates = await client.GetUpdatesAsync(
-                    offset: response.MessageId + 1,
-                    limit: 10
-                );
-
-                foreach (var update in updates)
-                {
-                    if (update.Message.From.Id == message.From.Id &&
-                        update.Message.Chat.Id == message.Chat.Id &&
-                        update.Message.ReplyToMessage?.MessageId == response.MessageId &&
-                        update.Message.Text != null &&
-                        update.Message.Text.Length == expectedLength)
-                    {
-                        await client.SetWebhookAsync(hook);
-                        return update.Message.Text;
-                    }
-                }
-
-                await Task.Delay(1000); // Wait for 1 second before checking for updates again
-            }
+            return await SendMessage(client, message.Chat.Id, "Ви перейшли в меню профілю", replyMarkup: ReplyMarkups.ProfileMenu());
         }
     }
 }

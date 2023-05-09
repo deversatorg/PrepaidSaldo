@@ -24,6 +24,7 @@ namespace ApplicationAuth.DAL
 
         public virtual DbSet<TelegramMessage> TelegramMessages { get; set; }
         public virtual DbSet<TelegramSticker> TelegramStickers { get; set; }
+        public virtual DbSet<Dialog> Dialogs { get; set; }
 
         #region DbSet for stored procedures
 

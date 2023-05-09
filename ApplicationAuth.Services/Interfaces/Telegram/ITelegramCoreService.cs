@@ -11,5 +11,7 @@ namespace ApplicationAuth.Services.Interfaces.Telegram
         Task<Message> SendInitKeyboard(ITelegramBotClient client, Message message);
         Task<Message> RegisterSaldo(ITelegramBotClient client, Message message);
         Task<Message> GetBalance(ITelegramBotClient client, Message message);
+        Task<Message> DeleteSaldo(ITelegramBotClient client, Message message);
+        Task<Message> GetProfile(ITelegramBotClient client, Message message);
     }
 }

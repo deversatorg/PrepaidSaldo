@@ -77,7 +77,9 @@ namespace ApplicationAuth.Services.Services
 
         public async Task<ApplicationUser> Register(TelegramUserRegisterRequestModel model)
         {
-            ApplicationUser user = _unitOfWork.Repository<ApplicationUser>().Find(x => x.TelegramId == model.UserId);
+            ApplicationUser user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == model.UserId)
+                                                                            .Include(w => w.Saldo)
+                                                                            .FirstOrDefault();
 
             if (user != null)
                 return user;
@@ -93,7 +95,7 @@ namespace ApplicationAuth.Services.Services
                     PhoneNumberConfirmed = true
                 };
 
-                user.UserName = model.UserName == null ? user.UserName = "username" : user.UserName = model.UserName;
+                user.UserName = model.UserName == null ? user.UserName = $"user_{model.UserId}" : user.UserName = model.UserName;
 
                 var result = await _userManager.CreateAsync(user, "Welcome1");
 

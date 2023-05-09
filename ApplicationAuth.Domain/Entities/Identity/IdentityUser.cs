@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using ApplicationAuth.Domain.Entities.Saldo;
+using ApplicationAuth.Domain.Entities.Telegram;
 
 namespace ApplicationAuth.Domain.Entities.Identity
 {
@@ -61,6 +62,9 @@ namespace ApplicationAuth.Domain.Entities.Identity
 
         [InverseProperty("User")]
         public virtual SaldoProfile Saldo { get; set; }
+
+        [InverseProperty("User")]
+        public virtual ICollection<Dialog> Dialogs { get; set; }
 
         #endregion
 

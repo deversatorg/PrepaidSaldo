@@ -16,6 +16,9 @@ using ApplicationAuth.Services.Interfaces.Telegram;
 using ApplicationAuth.DAL.Abstract;
 using ApplicationAuth.Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
+using ApplicationAuth.Services.Interfaces;
+using ApplicationAuth.Domain.State;
+using ApplicationAuth.Models.RequestModels.Saldo;
 
 namespace ApplicationAuth.Services.Services.Telegram
 {
@@ -25,16 +28,19 @@ namespace ApplicationAuth.Services.Services.Telegram
         private readonly ITelegramCoreService _coreService;
         private readonly ILogger<HandleUpdateService> _logger;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
 
         public HandleUpdateService(ITelegramBotClient botClient, 
                                    ILogger<HandleUpdateService> logger,
                                    IUnitOfWork unitOfWork,
-                                   ITelegramCoreService coreService)
+                                   ITelegramCoreService coreService,
+                                   ICacheService cacheService)
         {
             _botClient = botClient;
             _logger = logger;
             _coreService = coreService;
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
         }
 
         public async Task EchoAsync(Update update)
@@ -75,13 +81,17 @@ namespace ApplicationAuth.Services.Services.Telegram
             {
                 "Баланс💳" => _coreService.GetBalance(_botClient, message), 
                 "Реєстрація📝" => _coreService.RegisterSaldo(_botClient, message),
+                "Профіль👨‍💼" => _coreService.GetProfile(_botClient, message),
+                "Видалити" => _coreService.DeleteSaldo(_botClient, message),
+                "Назад" => _coreService.SendInitKeyboard(_botClient, message),
                 "/start" => _coreService.SendInitKeyboard(_botClient, message),
                 "/inline" => SendInlineKeyboard(_botClient, message),
                 "/keyboard" => SendReplyKeyboard(_botClient, message),
                 "/remove" => RemoveKeyboard(_botClient, message),
                 "/photo" => SendFile(_botClient, message),
                 "/request" => RequestContactAndLocation(_botClient, message),
-                //_ => Usage(_botClient, message)
+                _ => StateCheck(_botClient, message)
+                //TODO: IF unknown command - check states in cache and transist to method;
             };
             Message sentMessage = await action;
             _logger.LogInformation("The message was sent with id: {sentMessageId}", sentMessage.MessageId);
@@ -180,6 +190,33 @@ namespace ApplicationAuth.Services.Services.Telegram
                 return await bot.SendTextMessageAsync(chatId: message.Chat.Id,
                                                       text: usage,
                                                       replyMarkup: new ReplyKeyboardRemove());
+            }
+
+            async Task<Message> StateCheck(ITelegramBotClient bot, Message message) 
+            {
+                var cacheFields = _cacheService.GetAllKeyValuePairs();
+                Dictionary<string, Action> actions = new Dictionary<string, Action>();
+                actions["registerSaldo"] = () => _coreService.RegisterSaldo(bot, message);
+                actions["example"] = () => Console.WriteLine("Found 'example' in the input");
+                foreach (var action in actions)
+                {
+                    foreach (var cacheField in cacheFields)
+                    {
+                        if (cacheField.Key.ToString().Contains($"{action.Key}_{message.From.Id}")) 
+                        {
+                            try
+                            {
+                                action.Value();
+                            }
+                            catch (Exception ex)
+                            {
+                                await HandleErrorAsync(ex);
+                            }
+                        }
+                    }
+                }
+                return new Message();
+                
             }
         }
 

@@ -9,6 +9,7 @@ using ApplicationAuth.DAL.Abstract;
 using ApplicationAuth.DAL.Repository;
 using ApplicationAuth.DAL.UnitOfWork;
 using ApplicationAuth.Domain.Entities.Identity;
+using ApplicationAuth.Domain.State;
 using ApplicationAuth.Helpers;
 using ApplicationAuth.Helpers.SwaggerFilters;
 using ApplicationAuth.Models.RequestModels.Telegram;
@@ -111,6 +112,12 @@ namespace ApplicationAuth
             services.AddSingleton<IHashUtility, HashUtility>();
             services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped(typeof(IState<>), typeof(State<>));
+            services.AddScoped<IStateFactory, StateFactory>();
+
+            services.AddMemoryCache();
+            services.AddSingleton<ICacheService, CacheService>();
+
             services.AddScoped<IJWTService, JWTService>();
             services.AddTransient<IAccountService, AccountService>();
             services.AddScoped<IUserService, UserService>();
