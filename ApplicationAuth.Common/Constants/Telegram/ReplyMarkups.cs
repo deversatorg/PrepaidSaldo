@@ -109,5 +109,45 @@ namespace ApplicationAuth.Common.Constants.Telegram
 
             return keyboard;
         }
+
+        public static IReplyMarkup HistoryInlinePagination(List<string> data, string functionName, string period, int page = 1, int totalPages = 1)
+        {
+            var keyboard = new List<List<InlineKeyboardButton>>();
+
+            foreach (var item in data)
+            {
+                keyboard.Add(new List<InlineKeyboardButton>()
+                {
+                    InlineKeyboardButton.WithCallbackData($"{item}", $"_")
+                });
+            }
+
+            keyboard.Add(new List<InlineKeyboardButton>() 
+            {
+                InlineKeyboardButton.WithCallbackData("⬅️", page == 1 ? "_" : $"/{functionName}?page={page - 1}&period={period}"),
+                InlineKeyboardButton.WithCallbackData("🔍", "/search"),
+                InlineKeyboardButton.WithCallbackData("➡️", page == totalPages ? "_" : $"/{functionName}?page={page + 1}&period={period}")
+            });
+            keyboard.Add(new List<InlineKeyboardButton>() { InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "_")});
+
+            return new InlineKeyboardMarkup(keyboard);
+        }
+
+        public static IReplyMarkup PeriodsInlinePagination(List<string> buttons,string functionName, int page = 1)
+        {
+            //$"/{functionName}?page={page}&period={period}"
+            int totalPages = buttons.Count >6 ?buttons.Count / 6 : 1;
+            var keyboard = new List<List<InlineKeyboardButton>>();
+            foreach (var period in buttons)
+            {
+                keyboard.Add(new List<InlineKeyboardButton>() 
+                { 
+                    InlineKeyboardButton.WithCallbackData($"{period}", $"/{functionName}?page={page}&period={period.Replace(",", "").Replace(" ", "")}")
+                });
+            }
+            keyboard.Add(new List<InlineKeyboardButton>(){InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "_")});
+
+            return new InlineKeyboardMarkup(keyboard);
+        }
     }
 }

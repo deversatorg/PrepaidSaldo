@@ -1,4 +1,8 @@
 ﻿using ApplicationAuth.Domain.Entities.Identity;
+using ApplicationAuth.Models.Enums;
+using ApplicationAuth.Models.RequestModels;
+using ApplicationAuth.Models.RequestModels.Saldo;
+using ApplicationAuth.Models.ResponseModels;
 using ApplicationAuth.Models.ResponseModels.Saldo;
 using System;
 using System.Collections.Generic;
@@ -12,5 +16,10 @@ namespace ApplicationAuth.Services.Interfaces
     {
         Task<SaldoResponseModel> Get(ApplicationUser user);
         Task<string> DeleteSaldo(ApplicationUser user);
+        #region table
+        Task<PaginationResponseModel<TransactionTableRowResponseModel>> GetTransactionsHistory(SaldoPaginationRequestModel<SaldoTableColumn> model, ApplicationUser user);
+        Task<List<string>> GetHistoryPeriods(ApplicationUser user);
+        Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction);
+        #endregion
     }
 }

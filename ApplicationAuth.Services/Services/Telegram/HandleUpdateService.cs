@@ -19,6 +19,9 @@ using Microsoft.EntityFrameworkCore;
 using ApplicationAuth.Services.Interfaces;
 using ApplicationAuth.Domain.State;
 using ApplicationAuth.Models.RequestModels.Saldo;
+using ApplicationAuth.Models.RequestModels;
+using ApplicationAuth.Models.Enums;
+using Microsoft.Bot.Schema.Teams;
 
 namespace ApplicationAuth.Services.Services.Telegram
 {
@@ -82,6 +85,7 @@ namespace ApplicationAuth.Services.Services.Telegram
                 "Баланс💳" => _coreService.GetBalance(_botClient, message), 
                 "Реєстрація📝" => _coreService.RegisterSaldo(_botClient, message),
                 "Профіль👨‍💼" => _coreService.GetProfile(_botClient, message),
+                "Виписка📃" => _coreService.GetHistoryPeriods(_botClient, message),
                 "Видалити" => _coreService.DeleteSaldo(_botClient, message),
                 "Назад" => _coreService.SendInitKeyboard(_botClient, message),
                 "/start" => _coreService.SendInitKeyboard(_botClient, message),
@@ -223,13 +227,36 @@ namespace ApplicationAuth.Services.Services.Telegram
         // Process Inline Keyboard callback data
         private async Task BotOnCallbackQueryReceived(CallbackQuery callbackQuery)
         {
-            await _botClient.AnswerCallbackQueryAsync(
-                callbackQueryId: callbackQuery.Id,
-                text: $"Received {callbackQuery.Data}");
+            await _botClient.SendChatActionAsync(callbackQuery.Message.Chat.Id, ChatAction.Typing);
+            Func<Task<Message>> action = callbackQuery.Data!.Split('?')[0] switch
+            {
+                "/" + nameof(_coreService.GetTransactionsHistory) => async () =>
+                {
+                    // Извлекаем параметры из callbackQuery.Data
+                    var parameters = callbackQuery.Data.Split('?')[1]
+                        .Split('&')
+                        .Select(param => param.Split('='))
+                        .ToDictionary(parts => parts[0], parts => parts[1]);
 
-            await _botClient.SendTextMessageAsync(
-                chatId: callbackQuery.Message.Chat.Id,
-                text: $"Received {callbackQuery.Data}");
+                    // Получаем необходимые значения из параметров
+                    var page = int.Parse(parameters["page"]);
+                    var period = parameters["period"];
+
+                    // Вызываем метод для получения истории транзакций
+                    var transactionsHistory = await _coreService.GetTransactionsHistory(_botClient,callbackQuery.Message,new SaldoPaginationRequestModel<SaldoTableColumn>() { CurrentPage = page, Limit = 6, Period = period});
+                    
+                    return transactionsHistory;
+                }
+                ,
+                _ => null,
+                //TODO: IF unknown command - check states in cache and transist to method;
+            };
+            Message nessage = await action.Invoke();
+
+            /*await _botClient.AnswerCallbackQueryAsync(
+                callbackQueryId: callbackQuery.Id,
+                text: $"Received {callbackQuery.Data}");*/
+
         }
 
         #region Inline Mode
@@ -280,7 +307,7 @@ namespace ApplicationAuth.Services.Services.Telegram
                 _ => exception.ToString()
             };
 
-            _logger.LogInformation("HandleError: {ErrorMessage}", ErrorMessage);
+            _logger.LogError("HandleError: {ErrorMessage}", ErrorMessage);
             return Task.CompletedTask;
         }
     }

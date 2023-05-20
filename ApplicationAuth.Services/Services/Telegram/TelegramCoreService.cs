@@ -5,10 +5,13 @@ using ApplicationAuth.Domain.Entities.Identity;
 using ApplicationAuth.Domain.Entities.Saldo;
 using ApplicationAuth.Domain.Entities.Telegram;
 using ApplicationAuth.Domain.State;
+using ApplicationAuth.Models.Enums;
+using ApplicationAuth.Models.RequestModels;
 using ApplicationAuth.Models.RequestModels.Saldo;
 using ApplicationAuth.Models.RequestModels.Telegram;
 using ApplicationAuth.Services.Interfaces;
 using ApplicationAuth.Services.Interfaces.Telegram;
+using Markdig;
 using Microsoft.Bot.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -19,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Policy;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -26,6 +30,7 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.InputFiles;
 using Telegram.Bot.Types.ReplyMarkups;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
@@ -72,8 +77,6 @@ namespace ApplicationAuth.Services.Services.Telegram
                 throw new ApplicationException();
             }
         }
-
-        
 
         #region Saldo
         public async Task<Message> RegisterSaldo(ITelegramBotClient client, Message message)
@@ -176,6 +179,28 @@ namespace ApplicationAuth.Services.Services.Telegram
             return await SendMessage(client, message.Chat.Id, response, replyMarkup: ReplyMarkups.MainMenu());
 
         }
+
+        public async Task<Message> GetTransactionsHistory(ITelegramBotClient client, Message message, SaldoPaginationRequestModel<SaldoTableColumn> model) 
+        {
+            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == message.From.Id.ToString() || x.TelegramId == message.Chat.Id.ToString())
+                                                                .Include(w => w.Saldo)
+                                                                .FirstOrDefault();
+
+            if (user.Saldo == null)
+                return await SendMessage(client, message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо так і проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
+
+            var response = await _saldoService.GetTransactionsHistory(model, user);
+            var data = new List<string>();
+
+            foreach (var transaction in response.Data) 
+            {
+                data.Add(transaction.Date + " " + transaction.Company + " " + transaction.Amount);
+            }
+
+            return await client.SendTextMessageAsync(message.Chat.Id,
+                "Історія за вибраний вами період:", 
+                replyMarkup: ReplyMarkups.HistoryInlinePagination(data, nameof(GetTransactionsHistory), model.Period, model.CurrentPage, response.TotalCount));
+        }
         #endregion
 
         public async Task<Message> SendInitKeyboard(ITelegramBotClient client, Message message)
@@ -219,6 +244,92 @@ namespace ApplicationAuth.Services.Services.Telegram
         {
             
             return await SendMessage(client, message.Chat.Id, "Ви перейшли в меню профілю", replyMarkup: ReplyMarkups.ProfileMenu());
+        }
+
+        public string BuildTelegramTable(
+            List<string> table_lines,
+            string tableColumnSeparator = "|", char inputArraySeparator = ';',
+            int maxColumnWidth = 0, bool fixedColumnWidth = false, bool autoColumnWidth = false,
+            int minimumColumnWidth = 4, int columnPadRight = 0, int columnPadLeft = 0,
+            bool beginEndBorders = true)
+        {
+            var prereadyTable = new List<string>() { "<pre>" };
+            var columnsWidth = new List<int>();
+            var firstLine = table_lines[0];
+            var lineVector = firstLine.Split(inputArraySeparator);
+
+            if (fixedColumnWidth && maxColumnWidth == 0) throw new ArgumentException("For fixedColumnWidth usage must set maxColumnWidth > 0");
+            else if (fixedColumnWidth && maxColumnWidth > 0)
+            {
+                for (var x = 0; x < lineVector.Length; x++)
+                    columnsWidth.Add(maxColumnWidth + columnPadRight + columnPadLeft);
+            }
+            else
+            {
+                for (var x = 0; x < lineVector.Length; x++)
+                {
+                    var columnData = lineVector[x].Trim();
+                    var columnFullLength = columnData.Length;
+
+                    if (autoColumnWidth)
+                        table_lines.ForEach(line => columnFullLength = line.Split(inputArraySeparator)[x].Length > columnFullLength ? line.Split(inputArraySeparator)[x].Length : columnFullLength);
+
+                    columnFullLength = columnFullLength < minimumColumnWidth ? minimumColumnWidth : columnFullLength;
+
+                    var columnWidth = columnFullLength + columnPadRight + columnPadLeft;
+
+                    if (maxColumnWidth > 0 && columnWidth > maxColumnWidth)
+                        columnWidth = maxColumnWidth;
+
+                    columnsWidth.Add(columnWidth);
+                }
+            }
+
+            foreach (var line in table_lines)
+            {
+                lineVector = line.Split(inputArraySeparator);
+
+                var fullLine = new string[lineVector.Length + (beginEndBorders ? 2 : 0)];
+                if (beginEndBorders) fullLine[0] = "";
+
+                for (var x = 0; x < lineVector.Length; x++)
+                {
+                    var clearedData = lineVector[x].Trim();
+                    var dataLength = clearedData.Length;
+                    var columnWidth = columnsWidth[x];
+                    var columnSizeWithoutTrimSize = columnWidth - columnPadRight - columnPadLeft;
+                    var dataCharsToRead = columnSizeWithoutTrimSize > dataLength ? dataLength : columnSizeWithoutTrimSize;
+                    var columnData = clearedData.Substring(0, dataCharsToRead);
+                    columnData = columnData.PadRight(columnData.Length + columnPadRight);
+                    columnData = columnData.PadLeft(columnData.Length + columnPadLeft);
+
+                    var column = columnData.PadRight(columnWidth);
+
+                    fullLine[x + (beginEndBorders ? 1 : 0)] = column;
+                }
+
+                if (beginEndBorders) fullLine[fullLine.Length - 1] = "";
+
+                prereadyTable.Add(string.Join(tableColumnSeparator, fullLine));
+            }
+
+            prereadyTable.Add("</pre>");
+
+            return string.Join("\r\n", prereadyTable);
+        }
+
+        public async Task<Message> GetHistoryPeriods(ITelegramBotClient client, Message message)
+        {
+            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == message.From.Id.ToString())
+                                                                .Include(w => w.Saldo)
+                                                                .FirstOrDefault();
+
+            if (user.Saldo == null)
+                return await SendMessage(client, message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо так і проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
+
+            var periods = await _saldoService.GetHistoryPeriods(user);
+
+            return await SendMessage(client, message.Chat.Id, "Виберіть за який період хочете переглянути исторію:", replyMarkup: ReplyMarkups.PeriodsInlinePagination(periods, nameof(GetTransactionsHistory)));
         }
     }
 }
