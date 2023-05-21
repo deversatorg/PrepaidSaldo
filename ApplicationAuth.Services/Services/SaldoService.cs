@@ -9,6 +9,7 @@ using ApplicationAuth.Models.RequestModels.Saldo;
 using ApplicationAuth.Models.ResponseModels;
 using ApplicationAuth.Models.ResponseModels.Saldo;
 using ApplicationAuth.Services.Interfaces;
+using ApplicationAuth.Services.Interfaces.Driver;
 using ApplicationAuth.Services.Services.Telegram;
 using AutoMapper;
 using Braintree;
@@ -35,16 +36,19 @@ namespace ApplicationAuth.Services.Services
     public class SaldoService : ISaldoService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IWebDriverManager _driverManager;
         private readonly IMapper _mapper;
         private readonly ILogger<SaldoService> _logger;
 
         public SaldoService(IUnitOfWork unitOfWork, 
                             IMapper mapper,
-                            ILogger<SaldoService> logger) 
+                            ILogger<SaldoService> logger,
+                            IWebDriverManager driverManager) 
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _logger = logger;
+            _driverManager = driverManager;
         }
 
         public async Task<string> DeleteSaldo(ApplicationUser user)
@@ -57,26 +61,27 @@ namespace ApplicationAuth.Services.Services
 
         public async Task<SaldoResponseModel> Get(ApplicationUser user)
         {
-            using (IWebDriver driver = new ChromeDriver()) 
-            {
-                driver.Url = Saldo.Base;
-                driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
-                driver.FindElement(By.XPath("//input[@id='mainform:password']")).SendKeys(user.Saldo.SecureCode);
-                driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
-                var balance = driver.FindElement(By.XPath("//td[contains(.,'€')]")).GetAttribute("textContent");
-                balance = Regex.Replace(balance, @"[ \r\n\t]", "").TrimStart().Replace("€", "").Replace(" ", "");
-                balance = Regex.Replace(balance, @"\s+", String.Empty);
-                user.Saldo.Balance = double.Parse(balance, CultureInfo.InvariantCulture);
-                _unitOfWork.SaveChanges();
-                return new SaldoResponseModel() { AccountNumber = user.Saldo.AccountNumber, Balance = double.Parse(balance, CultureInfo.InvariantCulture), Status=true};
-            }
+            IWebDriver driver = _driverManager.GetDriver();
+
+            driver.Url = Saldo.Base;
+            driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
+            driver.FindElement(By.XPath("//input[@id='mainform:password']")).SendKeys(user.Saldo.SecureCode);
+            driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
+            var balance = driver.FindElement(By.XPath("//td[contains(.,'€')]")).GetAttribute("textContent");
+            balance = Regex.Replace(balance, @"[ \r\n\t]", "").TrimStart().Replace("€", "").Replace(" ", "");
+            balance = Regex.Replace(balance, @"\s+", String.Empty);
+            user.Saldo.Balance = double.Parse(balance, CultureInfo.InvariantCulture);
+            _unitOfWork.SaveChanges();
+
+            _driverManager.ReleaseDriver(driver);
+            return new SaldoResponseModel() { AccountNumber = user.Saldo.AccountNumber, Balance = double.Parse(balance, CultureInfo.InvariantCulture), Status = true };
         }
 
         public async Task<List<string>> GetHistoryPeriods(ApplicationUser user)
         {
             List<string> periods = new List<string>();
 
-            using IWebDriver driver = new ChromeDriver();
+            IWebDriver driver = _driverManager.GetDriver();
 
             driver.Url = Saldo.Base;
             driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
@@ -89,12 +94,17 @@ namespace ApplicationAuth.Services.Services
             {
                 periods.Add(item.GetAttribute("textContent"));
             }
+
+            _driverManager.ReleaseDriver(driver);
             return periods;
         }
 
-        /*public async Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction)
+        //TODO: 
+        public async Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction)
         {
-            using IWebDriver driver = new ChromeDriver();
+            var response = new TransactionResponseModel();
+
+            IWebDriver driver = new ChromeDriver();
 
             driver.Url = Saldo.Base;
             driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
@@ -102,8 +112,12 @@ namespace ApplicationAuth.Services.Services
             driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
             driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
 
+            //....
 
-        }*/
+            _driverManager.ReleaseDriver(driver);
+            return response;
+
+        }
 
         //TODO: Search with inlinebutton(pagination model already contains search property)
         public async Task<PaginationResponseModel<TransactionTableRowResponseModel>> GetTransactionsHistory(SaldoPaginationRequestModel<SaldoTableColumn> model, ApplicationUser user)
@@ -111,7 +125,7 @@ namespace ApplicationAuth.Services.Services
             List<TransactionTableRowResponseModel> transactions = new List<TransactionTableRowResponseModel>();
             int totalCount = 0;
 
-            using IWebDriver driver = new ChromeDriver();
+            IWebDriver driver = _driverManager.GetDriver();
 
             //var search = !string.IsNullOrEmpty(model.Search) && model.Search.Length > 1;
             driver.Url = Saldo.Base;
@@ -121,8 +135,6 @@ namespace ApplicationAuth.Services.Services
             driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
 
             // Парсинг таблицы
-            //int totalCount = await _getPagesCount(driver);
-
             IWebElement periodSelect = driver.FindElement(By.XPath("//select[@id='mainform:period']"));
             var period = periodSelect.FindElements(By.TagName("option")).First(x => x.GetAttribute("textContent").Replace(" ", "").Replace(",", "").Contains(model.Period));
 
@@ -161,23 +173,17 @@ namespace ApplicationAuth.Services.Services
 
             foreach (var row in rows)
             {
-
-                string date = row.FindElement(By.ClassName("colTxDate")).GetAttribute("textContent");
-                string company = row.FindElement(By.ClassName("colMerchantName")).GetAttribute("textContent");
-                string transactionType = row.FindElement(By.ClassName("colTxTypeCode")).GetAttribute("textContent");
-                string debitOrCredit = row.FindElement(By.ClassName("colPaymentCode")).GetAttribute("textContent");
-                string amount = row.FindElement(By.ClassName("colAmount")).GetAttribute("textContent");
-
                 transactions.Add(new TransactionTableRowResponseModel()
                 {
-                    Date = date,
-                    Company = company,
-                    TransactionType = transactionType,
-                    DebitOrCredit = debitOrCredit,
-                    Amount = amount,
+                    Date = row.FindElement(By.ClassName("colTxDate")).GetAttribute("textContent"),
+                    Company = row.FindElement(By.ClassName("colMerchantName")).GetAttribute("textContent"),
+                    TransactionType = row.FindElement(By.ClassName("colTxTypeCode")).GetAttribute("textContent"),
+                    DebitOrCredit = row.FindElement(By.ClassName("colPaymentCode")).GetAttribute("textContent"),
+                    Amount = row.FindElement(By.ClassName("colAmount")).GetAttribute("textContent"),
                 });
             }
 
+            _driverManager.ReleaseDriver(driver);
             return new(transactions, totalCount);
         }
         private async Task<int> _getPagesCount(IWebDriver driver)
