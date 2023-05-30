@@ -150,7 +150,7 @@ namespace ApplicationAuth
                 options.AddArgument("no-sandbox");
                 options.AddArgument("disable-gpu");
                 IWebDriver driver = new ChromeDriver(options);
-
+                driver.Url = Saldo.Base;
                 return driver;
             });
 

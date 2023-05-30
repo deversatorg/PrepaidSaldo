@@ -197,6 +197,7 @@ namespace ApplicationAuth.Services.Services.Telegram
                 data.Add(transaction.Date + " " + transaction.Company + " " + transaction.Amount);
             }
 
+            //await client.EditMessageTextAsync(message.Chat.Id.ToString(), "Історія за вибраний вами період:", replyMarkup: (InlineKeyboardMarkup)ReplyMarkups.HistoryInlinePagination(data, nameof(GetTransactionsHistory), model.Period, model.CurrentPage, response.TotalCount));
             return await client.SendTextMessageAsync(message.Chat.Id,
                 "Історія за вибраний вами період:", 
                 replyMarkup: ReplyMarkups.HistoryInlinePagination(data, nameof(GetTransactionsHistory), model.Period, model.CurrentPage, response.TotalCount));

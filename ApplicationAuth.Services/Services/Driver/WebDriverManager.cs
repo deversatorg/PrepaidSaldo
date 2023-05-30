@@ -25,11 +25,13 @@ namespace ApplicationAuth.Services.Services.Driver
         {
             lock (_lock)
             {
-                var availableDriver = _driverList.FirstOrDefault(d => !d.isBusy);
+                var availableDriver = _driverList.FirstOrDefault(d => d.isBusy == false);
 
-                if (availableDriver != default)
+                if (availableDriver.driver != null)
                 {
+                    _driverList.Remove(availableDriver);
                     availableDriver.isBusy = true;
+                    _driverList.Add(availableDriver);
                     return availableDriver.driver;
                 }
 
@@ -47,7 +49,9 @@ namespace ApplicationAuth.Services.Services.Driver
 
                 if (driverInfo != default)
                 {
+                    _driverList.Remove(driverInfo);
                     driverInfo.isBusy = false;
+                    _driverList.Add(driverInfo);
                 }
             }
         }
@@ -66,7 +70,7 @@ namespace ApplicationAuth.Services.Services.Driver
                 {
                     foreach (var item in _driverList)
                     {
-                        item.driver.Quit();
+                        //item.driver.Quit();
                         item.driver.Dispose();
                     }
 

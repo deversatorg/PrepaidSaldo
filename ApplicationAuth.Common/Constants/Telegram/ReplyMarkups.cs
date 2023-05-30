@@ -136,7 +136,7 @@ namespace ApplicationAuth.Common.Constants.Telegram
         public static IReplyMarkup PeriodsInlinePagination(List<string> buttons,string functionName, int page = 1)
         {
             //$"/{functionName}?page={page}&period={period}"
-            int totalPages = buttons.Count >6 ?buttons.Count / 6 : 1;
+            //int totalPages = buttons.Count >6 ?buttons.Count / 6 : 1;
             var keyboard = new List<List<InlineKeyboardButton>>();
             foreach (var period in buttons)
             {
@@ -145,7 +145,7 @@ namespace ApplicationAuth.Common.Constants.Telegram
                     InlineKeyboardButton.WithCallbackData($"{period}", $"/{functionName}?page={page}&period={period.Replace(",", "").Replace(" ", "")}")
                 });
             }
-            keyboard.Add(new List<InlineKeyboardButton>(){InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "_")});
+            //keyboard.Add(new List<InlineKeyboardButton>(){InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "_")});
 
             return new InlineKeyboardMarkup(keyboard);
         }
