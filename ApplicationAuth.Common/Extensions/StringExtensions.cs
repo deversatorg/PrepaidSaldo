@@ -1,5 +1,8 @@
 using System;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ApplicationAuth.Common.Extensions
@@ -64,5 +67,49 @@ namespace ApplicationAuth.Common.Extensions
 
             return dp[str1.Length, str2.Length];
         }
+
+        public static string CompressString(string input)
+        {
+            byte[] inputBytes = Encoding.UTF8.GetBytes(input);
+            using (var outputStream = new MemoryStream())
+            {
+                using (var gzipStream = new GZipStream(outputStream, CompressionMode.Compress))
+                {
+                    gzipStream.Write(inputBytes, 0, inputBytes.Length);
+                }
+                byte[] compressedBytes = outputStream.ToArray();
+                return Convert.ToBase64String(compressedBytes);
+            }
+        }
+
+        public static string DecompressString(string compressedInput)
+        {
+            byte[] compressedBytes = Convert.FromBase64String(compressedInput);
+            using (var inputStream = new MemoryStream(compressedBytes))
+            {
+                using (var gzipStream = new GZipStream(inputStream, CompressionMode.Decompress))
+                {
+                    using (var outputMemoryStream = new MemoryStream())
+                    {
+                        gzipStream.CopyTo(outputMemoryStream);
+                        byte[] decompressedBytes = outputMemoryStream.ToArray();
+                        return Encoding.UTF8.GetString(decompressedBytes);
+                    }
+                }
+            }
+        }
+
+        public static byte[] GetCutBytes(this string str, int maxlength, Encoding encoding)
+        {
+            char[] charArray = str.ToCharArray();
+            int length = charArray.Length;
+            while (encoding.GetByteCount(charArray, 0, length) > maxlength)
+                length--;
+
+            byte[] returned = new byte[maxlength];
+            encoding.GetBytes(charArray, 0, length, returned, 0);
+            return returned;
+        }
+
     }
 }

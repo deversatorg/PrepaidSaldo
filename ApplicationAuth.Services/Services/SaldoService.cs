@@ -81,7 +81,7 @@ namespace ApplicationAuth.Services.Services
         {
             List<string> periods = new List<string>();
 
-            IWebDriver driver = _driverManager.GetDriver();
+            IWebDriver driver =  _driverManager.GetDriver();
 
             driver.Url = Saldo.Base;
             driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
@@ -100,11 +100,11 @@ namespace ApplicationAuth.Services.Services
         }
 
         //TODO: 
-        public async Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction)
+        public async Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction, int page, string period)
         {
             var response = new TransactionResponseModel();
 
-            IWebDriver driver = new ChromeDriver();
+            IWebDriver driver = _driverManager.GetDriver();
 
             driver.Url = Saldo.Base;
             driver.FindElement(By.XPath("//input[@id='mainform:cardnumber']")).SendKeys(user.Saldo.AccountNumber);
@@ -113,6 +113,54 @@ namespace ApplicationAuth.Services.Services
             driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
 
             //....
+            IWebElement periodSelect = driver.FindElement(By.XPath("//select[@id='mainform:period']"));
+            var periodOption = periodSelect.FindElements(By.TagName("option")).First(x => x.GetAttribute("textContent").Replace(" ", "").Replace(",", "").Contains(period, StringComparison.OrdinalIgnoreCase));
+
+            periodSelect.Click();
+            periodOption.Click();
+
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+            wait.Until(x => x.FindElement(By.ClassName("pager")) != null);
+
+            IWebElement pager = driver.FindElement(By.ClassName("pager"));
+
+            var pageElement = pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "active_page")?.GetAttribute("textContent") ?? null;
+
+            if (pageElement != null)
+            {
+                while (pageElement != page.ToString())
+                {
+                    pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "next").Click();
+                    wait.Until(x => x.FindElement(By.ClassName("pager")) != null);
+                    pager = driver.FindElement(By.ClassName("pager"));
+                    pageElement = pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "active_page").GetAttribute("textContent");
+                }
+            }
+
+            IWebElement tableElement = driver.FindElement(By.XPath("//table[@id='mainform:zoekresultaten']"));
+            IEnumerable<IWebElement> rows = tableElement.FindElements(By.TagName("tr")).Skip(1);
+
+            foreach (var row in rows)
+            {
+                var tds = row.FindElements(By.TagName("td"));
+                string target = string.Join(" ", tds.Where(w => w.GetAttribute("class") != "colTxTypeCode" && w.GetAttribute("class") != "colPaymentCode").Select(td => td.Text.Trim())).Replace(".", "").Replace(" ", "").Replace("-", "").ToLower();
+                if (target.Contains(transaction.ToLower())) 
+                {
+                    row.Click();
+                    break;
+                }
+            }
+
+            //IWebElement transactionTable = driver.FindElements(By.ClassName("formwrapper")).LastOrDefault(x => x.FindElement(By.ClassName("data")) != null);
+            IWebElement transactionTable = driver.FindElement(By.XPath("(//div[@class='formwrapper'])[2]//table[@class='data'][last()]"));
+            var rows2 = transactionTable.FindElements(By.TagName("td")).ToList();
+            response.Date = rows2.First().Text;
+            response.Company = rows2[1].Text;
+            response.Description = rows2[2].Text;
+            response.TransactionType = rows2[3].Text;
+            response.DebitOrCredit = rows2[4].Text;
+            response.Amount = rows2[5].Text;
+
 
             _driverManager.ReleaseDriver(driver);
             return response;
@@ -134,7 +182,6 @@ namespace ApplicationAuth.Services.Services
             driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
             driver.FindElement(By.XPath("//a[@href='#'][contains(.,'Next')]")).Click();
 
-            // Парсинг таблицы
             IWebElement periodSelect = driver.FindElement(By.XPath("//select[@id='mainform:period']"));
             var period = periodSelect.FindElements(By.TagName("option")).First(x => x.GetAttribute("textContent").Replace(" ", "").Replace(",", "").Contains(model.Period));
 
@@ -157,13 +204,17 @@ namespace ApplicationAuth.Services.Services
                 totalCount = 1;
             }
 
-            var page = pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "active_page").GetAttribute("textContent");
-            while (page != model.CurrentPage.ToString()) 
+            var page = pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "active_page")?.GetAttribute("textContent") ?? null;
+
+            if (page != null)
             {
-                pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "next").Click();
-                wait.Until(x => x.FindElement(By.ClassName("pager")) != null);
-                pager = driver.FindElement(By.ClassName("pager"));
-                page = pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "active_page").GetAttribute("textContent");
+                while (page != model.CurrentPage.ToString())
+                {
+                    pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "next").Click();
+                    wait.Until(x => x.FindElement(By.ClassName("pager")) != null);
+                    pager = driver.FindElement(By.ClassName("pager"));
+                    page = pager.FindElements(By.TagName("li")).FirstOrDefault(x => x.GetAttribute("class") == "active_page").GetAttribute("textContent");
+                }
             }
 
             IWebElement tableElement = driver.FindElement(By.XPath("//table[@id='mainform:zoekresultaten']"));

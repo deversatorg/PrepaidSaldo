@@ -14,6 +14,7 @@ using ApplicationAuth.Services.Interfaces.Telegram;
 using Markdig;
 using Microsoft.Bot.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -180,14 +181,14 @@ namespace ApplicationAuth.Services.Services.Telegram
 
         }
 
-        public async Task<Message> GetTransactionsHistory(ITelegramBotClient client, Message message, SaldoPaginationRequestModel<SaldoTableColumn> model) 
+        public async Task<Message> GetTransactionsHistory(ITelegramBotClient client, CallbackQuery callbackQuery, SaldoPaginationRequestModel<SaldoTableColumn> model) 
         {
-            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == message.From.Id.ToString() || x.TelegramId == message.Chat.Id.ToString())
+            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == callbackQuery.Message.From.Id.ToString() || x.TelegramId == callbackQuery.Message.Chat.Id.ToString())
                                                                 .Include(w => w.Saldo)
                                                                 .FirstOrDefault();
 
             if (user.Saldo == null)
-                return await SendMessage(client, message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо так і проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
+                return await SendMessage(client, callbackQuery.Message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо так і проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
 
             var response = await _saldoService.GetTransactionsHistory(model, user);
             var data = new List<string>();
@@ -198,9 +199,11 @@ namespace ApplicationAuth.Services.Services.Telegram
             }
 
             //await client.EditMessageTextAsync(message.Chat.Id.ToString(), "Історія за вибраний вами період:", replyMarkup: (InlineKeyboardMarkup)ReplyMarkups.HistoryInlinePagination(data, nameof(GetTransactionsHistory), model.Period, model.CurrentPage, response.TotalCount));
-            return await client.SendTextMessageAsync(message.Chat.Id,
-                "Історія за вибраний вами період:", 
-                replyMarkup: ReplyMarkups.HistoryInlinePagination(data, nameof(GetTransactionsHistory), model.Period, model.CurrentPage, response.TotalCount));
+            await client.EditMessageTextAsync(callbackQuery.Message.Chat.Id.ToString(), callbackQuery.Message.MessageId,
+                    "Історія за вибраний вами період:",
+            replyMarkup: (InlineKeyboardMarkup)ReplyMarkups.HistoryInlinePagination(data, nameof(GetTransactionsHistory), model.Period, model.CurrentPage, response.TotalCount));
+
+            return callbackQuery.Message;
         }
         #endregion
 
@@ -331,6 +334,29 @@ namespace ApplicationAuth.Services.Services.Telegram
             var periods = await _saldoService.GetHistoryPeriods(user);
 
             return await SendMessage(client, message.Chat.Id, "Виберіть за який період хочете переглянути исторію:", replyMarkup: ReplyMarkups.PeriodsInlinePagination(periods, nameof(GetTransactionsHistory)));
+        }
+
+        public async Task<Message> GetTransaction(ITelegramBotClient client, CallbackQuery callbackQuery, string transaction, int page, string period)
+        {
+            var user = _unitOfWork.Repository<ApplicationUser>().Get(x => x.TelegramId == callbackQuery.Message.Chat.Id.ToString())
+                                                               .Include(w => w.Saldo)
+                                                               .FirstOrDefault();
+
+            if (user.Saldo == null)
+                return await SendMessage(client, callbackQuery.Message.Chat.Id, "Не бачимо вашого Saldo. Перевірте чи зареєстрували ви його. Якщо так і проблема не зникає, то напишіть у підтримку", replyMarkup: ReplyMarkups.InlineMenu());
+
+
+            var response = await _saldoService.GetTransaction(user, transaction, page, period);
+
+            await client.EditMessageTextAsync(callbackQuery.Message.Chat.Id.ToString(), callbackQuery.Message.MessageId,
+                response.Date + "\n" +
+                response.Company + "\n" +
+                response.DebitOrCredit + "\n" +
+                response.TransactionType + "\n" +
+                response.Amount + "\n" +
+                response.Description);
+
+            return callbackQuery.Message;
         }
     }
 }

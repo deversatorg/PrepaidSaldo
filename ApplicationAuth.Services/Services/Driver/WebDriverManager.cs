@@ -70,7 +70,7 @@ namespace ApplicationAuth.Services.Services.Driver
                 {
                     foreach (var item in _driverList)
                     {
-                        //item.driver.Quit();
+                        item.driver.Quit();
                         item.driver.Dispose();
                     }
 

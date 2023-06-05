@@ -1,8 +1,10 @@
-﻿using System;
+﻿using ApplicationAuth.Common.Extensions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -116,9 +118,16 @@ namespace ApplicationAuth.Common.Constants.Telegram
 
             foreach (var item in data)
             {
+                string callback = $"/T?page={page}&period={period}&t={item.Replace(".", "").Replace(" ", "").Replace("-", "")}";
+                byte[] dataBytes = Encoding.UTF8.GetBytes(callback);
+                if(dataBytes.Length > 64)
+                    callback = Encoding.UTF8.GetString(callback.GetCutBytes(64, UTF8Encoding.UTF8));
+
+                //int callbackDataLength = Encoding.UTF8.GetByteCount(compressedData);
                 keyboard.Add(new List<InlineKeyboardButton>()
                 {
-                    InlineKeyboardButton.WithCallbackData($"{item}", $"_")
+                    //InlineKeyboardButton.WithCallbackData($"{item}", $"/GetTransaction?transaction={item.Replace(" ", "").Replace(",", "").Replace(".", "")}&page={page}&period={period}")
+                    InlineKeyboardButton.WithCallbackData($"{item}", callback)
                 });
             }
 
