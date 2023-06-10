@@ -43,6 +43,8 @@ using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium;
 using StackExchange.Redis.Extensions.Core.Configuration;
 using StackExchange.Redis.Extensions.Newtonsoft;
 using Swashbuckle.AspNetCore.Filters;
@@ -58,6 +60,8 @@ using System.Text;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using OperationType = Microsoft.OpenApi.Models.OperationType;
+using ApplicationAuth.Services.Interfaces.Driver;
+using ApplicationAuth.Services.Services.Driver;
 
 namespace ApplicationAuth
 {
@@ -129,6 +133,8 @@ namespace ApplicationAuth
             services.AddHostedService<ConfigureWebhook>();
             services.AddSingleton<IHandleUpdateService, HandleUpdateService>();
 
+            services.AddScoped<IWebDriverManager, WebDriverManager>();
+
             #endregion
 
             var config = new AutoMapper.MapperConfiguration(cfg =>
@@ -137,6 +143,15 @@ namespace ApplicationAuth
             });
 
             services.AddSingleton(config.CreateMapper());
+            services.AddScoped<IWebDriver>(provider =>
+            {
+                var options = new ChromeOptions();
+                options.AddArgument("headless");
+                options.AddArgument("no-sandbox");
+                options.AddArgument("disable-gpu");
+                IWebDriver driver = new ChromeDriver(options);
+                return driver;
+            });
 
             #endregion
 

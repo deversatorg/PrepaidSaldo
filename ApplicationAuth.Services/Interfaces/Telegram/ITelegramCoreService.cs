@@ -18,7 +18,8 @@ namespace ApplicationAuth.Services.Interfaces.Telegram
         Task<Message> GetBalance(ITelegramBotClient client, Message message);
         Task<Message> DeleteSaldo(ITelegramBotClient client, Message message);
 
-        Task<Message> GetTransactionsHistory(ITelegramBotClient client, Message message, SaldoPaginationRequestModel<SaldoTableColumn> model);
+        Task<Message> GetTransactionsHistory(ITelegramBotClient client, CallbackQuery callbackQuery, SaldoPaginationRequestModel<SaldoTableColumn> model);
+        Task<Message> GetTransaction(ITelegramBotClient client, CallbackQuery callbackQuery, string transaction, int page, string period);
         Task<Message> GetHistoryPeriods(ITelegramBotClient client, Message message);
     }
 }

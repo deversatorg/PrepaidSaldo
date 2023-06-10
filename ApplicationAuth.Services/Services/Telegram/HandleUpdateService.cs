@@ -232,23 +232,35 @@ namespace ApplicationAuth.Services.Services.Telegram
             {
                 "/" + nameof(_coreService.GetTransactionsHistory) => async () =>
                 {
-                    // Извлекаем параметры из callbackQuery.Data
                     var parameters = callbackQuery.Data.Split('?')[1]
                         .Split('&')
                         .Select(param => param.Split('='))
                         .ToDictionary(parts => parts[0], parts => parts[1]);
 
-                    // Получаем необходимые значения из параметров
                     var page = int.Parse(parameters["page"]);
                     var period = parameters["period"];
 
-                    // Вызываем метод для получения истории транзакций
-                    var transactionsHistory = await _coreService.GetTransactionsHistory(_botClient,callbackQuery.Message,new SaldoPaginationRequestModel<SaldoTableColumn>() { CurrentPage = page, Limit = 6, Period = period});
+                    var transactionsHistory = await _coreService.GetTransactionsHistory(_botClient,callbackQuery,new SaldoPaginationRequestModel<SaldoTableColumn>() { CurrentPage = page, Limit = 6, Period = period});
                     
                     return transactionsHistory;
+                },
+
+                "/T" => async () => 
+                {
+                    var parameters = callbackQuery.Data.Split('?')[1]
+                        .Split('&')
+                        .Select(param => param.Split('='))
+                        .ToDictionary(parts => parts[0], parts => parts[1]);
+
+                    var transaction = parameters["t"];
+                    int? page = int.Parse(parameters["page"]);
+                    string? period = parameters["period"];
+
+                    var response = await _coreService.GetTransaction(_botClient, callbackQuery, transaction, page==null?1:page.Value, period);
+                    return response;
                 }
                 ,
-                _ => null,
+                _ => new Func<Task<Message>>(async () => { return new Message(); }),
                 //TODO: IF unknown command - check states in cache and transist to method;
             };
             Message nessage = await action.Invoke();

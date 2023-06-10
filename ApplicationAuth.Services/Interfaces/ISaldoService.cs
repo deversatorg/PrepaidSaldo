@@ -19,7 +19,7 @@ namespace ApplicationAuth.Services.Interfaces
         #region table
         Task<PaginationResponseModel<TransactionTableRowResponseModel>> GetTransactionsHistory(SaldoPaginationRequestModel<SaldoTableColumn> model, ApplicationUser user);
         Task<List<string>> GetHistoryPeriods(ApplicationUser user);
-        Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction);
+        Task<TransactionResponseModel> GetTransaction(ApplicationUser user, string transaction, int page, string period);
         #endregion
     }
 }
