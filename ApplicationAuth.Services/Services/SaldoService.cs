@@ -25,6 +25,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -143,7 +144,11 @@ namespace ApplicationAuth.Services.Services
             foreach (var row in rows)
             {
                 var tds = row.FindElements(By.TagName("td"));
-                string target = string.Join(" ", tds.Where(w => w.GetAttribute("class") != "colTxTypeCode" && w.GetAttribute("class") != "colPaymentCode").Select(td => td.Text.Trim())).Replace(".", "").Replace(" ", "").Replace("-", "").ToLower();
+                string target = string.Join(" ", tds.Where(w => w.GetAttribute("class") != "colTxTypeCode" && w.GetAttribute("class") != "colPaymentCode")
+                                        .Select(td => td.Text.Trim()))
+                                        .Replace(".", "").Replace(" ", "").Replace("-", "").Replace("*","")
+                                        .ToLower();
+
                 if (target.Contains(transaction.ToLower())) 
                 {
                     row.Click();
@@ -151,16 +156,27 @@ namespace ApplicationAuth.Services.Services
                 }
             }
 
-            //IWebElement transactionTable = driver.FindElements(By.ClassName("formwrapper")).LastOrDefault(x => x.FindElement(By.ClassName("data")) != null);
-            IWebElement transactionTable = driver.FindElement(By.XPath("(//div[@class='formwrapper'])[2]//table[@class='data'][last()]"));
-            var rows2 = transactionTable.FindElements(By.TagName("td")).ToList();
-            response.Date = rows2.First().Text;
-            response.Company = rows2[1].Text;
-            response.Description = rows2[2].Text;
-            response.TransactionType = rows2[3].Text;
-            response.DebitOrCredit = rows2[4].Text;
-            response.Amount = rows2[5].Text;
+            IWebElement transactionTable = driver.FindElement(By.XPath("//div[@class='formwrapper' and descendant::table[@class='data' and @border='0']]"));
+            var rows2 = transactionTable.FindElements(By.TagName("tr")).ToList();
 
+            var tableData = new Dictionary<string, IWebElement>();
+
+            rows2.ForEach(w =>
+            {
+                var ths = w.FindElements(By.TagName("th")).ToList();
+                var tds = w.FindElements(By.TagName("td")).ToList();
+                ths.ForEach(x =>
+                {
+                    tableData.Add(x.Text, tds[ths.IndexOf(x)]);
+                });
+
+            });
+
+            foreach (var prop in response.GetType().GetProperties())
+            {
+                IWebElement? value = tableData.FirstOrDefault(x => x.Key.Replace(" ", "").Replace("/", "").Contains(prop.Name, StringComparison.OrdinalIgnoreCase)).Value;
+                prop.SetValue(response, value == null ? "" : value.Text);
+            }
 
             _driverManager.ReleaseDriver(driver);
             return response;

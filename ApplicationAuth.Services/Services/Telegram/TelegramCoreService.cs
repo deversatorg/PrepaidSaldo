@@ -348,15 +348,15 @@ namespace ApplicationAuth.Services.Services.Telegram
 
             var response = await _saldoService.GetTransaction(user, transaction, page, period);
 
-            await client.EditMessageTextAsync(callbackQuery.Message.Chat.Id.ToString(), callbackQuery.Message.MessageId,
-                response.Date + "\n" +
-                response.Company + "\n" +
-                response.DebitOrCredit + "\n" +
-                response.TransactionType + "\n" +
-                response.Amount + "\n" +
-                response.Description);
+           return await client.SendTextMessageAsync(callbackQuery.Message.Chat.Id.ToString(),
+                "Дата та час : " + response.Date + "\n" +
+                "Компанія : " + response.Company + "\n" +
+                "Карта/Кеш : " + response.DebitCredit + "\n" +
+                "Тип транзакції : " + response.TransactionType + "\n" +
+                "Сума : " + response.Amount + "\n" +
+                "Опис транзакції: " + response.Description + "\n"
+                );
 
-            return callbackQuery.Message;
         }
     }
 }

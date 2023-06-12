@@ -118,7 +118,7 @@ namespace ApplicationAuth.Common.Constants.Telegram
 
             foreach (var item in data)
             {
-                string callback = $"/T?page={page}&period={period}&t={item.Replace(".", "").Replace(" ", "").Replace("-", "")}";
+                string callback = $"/T?page={page}&period={period}&t={item.Replace(".", "").Replace(" ", "").Replace("-", "").Replace("*", "")}";
                 byte[] dataBytes = Encoding.UTF8.GetBytes(callback);
                 if(dataBytes.Length > 64)
                     callback = Encoding.UTF8.GetString(callback.GetCutBytes(64, UTF8Encoding.UTF8));
@@ -144,8 +144,7 @@ namespace ApplicationAuth.Common.Constants.Telegram
 
         public static IReplyMarkup PeriodsInlinePagination(List<string> buttons,string functionName, int page = 1)
         {
-            //$"/{functionName}?page={page}&period={period}"
-            //int totalPages = buttons.Count >6 ?buttons.Count / 6 : 1;
+            
             var keyboard = new List<List<InlineKeyboardButton>>();
             foreach (var period in buttons)
             {
@@ -154,7 +153,6 @@ namespace ApplicationAuth.Common.Constants.Telegram
                     InlineKeyboardButton.WithCallbackData($"{period}", $"/{functionName}?page={page}&period={period.Replace(",", "").Replace(" ", "")}")
                 });
             }
-            //keyboard.Add(new List<InlineKeyboardButton>(){InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "_")});
 
             return new InlineKeyboardMarkup(keyboard);
         }
