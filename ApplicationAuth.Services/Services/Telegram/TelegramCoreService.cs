@@ -39,7 +39,6 @@ namespace ApplicationAuth.Services.Services.Telegram
 {
     public class TelegramCoreService : ITelegramCoreService
     {
-        private readonly ITelegramService _telegramService;
         private readonly IAccountService _accountService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IConfiguration _configuration;
@@ -47,7 +46,6 @@ namespace ApplicationAuth.Services.Services.Telegram
         private readonly ICacheService _cacheService;
         private readonly ISaldoService _saldoService;
         public TelegramCoreService(IConfiguration configuration,
-                                   ITelegramService telegramService,
                                    IAccountService accountService,
                                    IUnitOfWork unitOfWork,
                                    IStateFactory stateFactory,
@@ -57,7 +55,6 @@ namespace ApplicationAuth.Services.Services.Telegram
         {
 
             
-            _telegramService = telegramService;
             _accountService = accountService;
             _unitOfWork = unitOfWork;
             _configuration = configuration;

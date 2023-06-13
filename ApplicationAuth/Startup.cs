@@ -126,7 +126,6 @@ namespace ApplicationAuth
             services.AddTransient<IAccountService, AccountService>();
             services.AddScoped<IUserService, UserService>();
 
-            services.AddTransient<ITelegramService, TelegramService>();
             services.AddScoped<ITelegramCoreService, TelegramCoreService>();
             services.AddScoped<ISaldoService, SaldoService>();
 
@@ -149,6 +148,8 @@ namespace ApplicationAuth
                 options.AddArgument("headless");
                 options.AddArgument("no-sandbox");
                 options.AddArgument("disable-gpu");
+                // ”казываем путь к драйверу
+                options.AddArgument($"--webdriver={System.Environment.GetEnvironmentVariable("CHROME_DRIVER_PATH")}");
                 IWebDriver driver = new ChromeDriver(options);
                 return driver;
             });
@@ -213,6 +214,7 @@ namespace ApplicationAuth
 
                     options.OrderActionsBy(x => x.ActionDescriptor.DisplayName);
 
+                    /*
                     // resolve the IApiVersionDescriptionProvider service
                     // note: that we have to build a temporary service provider here because one has not been created yet
                     var provider = services.BuildServiceProvider().GetRequiredService<IApiVersionDescriptionProvider>();
@@ -228,6 +230,7 @@ namespace ApplicationAuth
 
                     // integrate xml comments
                     options.IncludeXmlComments(XmlCommentsFilePath);
+                    */
                     options.IgnoreObsoleteActions();
 
                     options.OperationFilter<DefaultValues>();
@@ -439,6 +442,7 @@ namespace ApplicationAuth
                     options.IndexStream = () => System.IO.File.OpenRead("Views/Swagger/swagger-ui.html");
                     options.InjectStylesheet("/Swagger/swagger-ui.style.css");
 
+                    /*
                     foreach (var description in provider.ApiVersionDescriptions)
                         options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
 
@@ -447,8 +451,10 @@ namespace ApplicationAuth
                     // for deep linking
                     options.EnableDeepLinking();
                     options.DisplayOperationId();
+                    */
                 });
 
+                /*
                 app.UseReDoc(c =>
                 {
                     c.RoutePrefix = "docs";
@@ -456,6 +462,7 @@ namespace ApplicationAuth
                     c.ExpandResponses("200");
                     c.RequiredPropsFirst();
                 });
+                */
             }
             app.UseCors(builder =>
             {
