@@ -19,6 +19,7 @@ namespace ApplicationAuth.Services.Services.Telegram
         private readonly ILogger<ConfigureWebhook> _logger;
         private readonly IServiceProvider _services;
         private readonly BotConfiguration _botConfig;
+        private string _webhookUrl;
 
         public ConfigureWebhook(
             ILogger<ConfigureWebhook> logger,
@@ -28,6 +29,7 @@ namespace ApplicationAuth.Services.Services.Telegram
             _logger = logger;
             _services = serviceProvider;
             _botConfig = configuration.GetSection("BotConfiguration").Get<BotConfiguration>();
+            _webhookUrl = Environment.GetEnvironmentVariable("WEBHOOK_URL");
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -40,7 +42,7 @@ namespace ApplicationAuth.Services.Services.Telegram
             // If you'd like to make sure that the Webhook request comes from Telegram, we recommend
             // using a secret path in the URL, e.g. https://www.example.com/<token>.
             // Since nobody else knows your bot's token, you can be pretty sure it's us.
-            var webhookAddress = @$"{_botConfig.HostAddress}/api/bot/update";
+            var webhookAddress = @$"{_webhookUrl}/api/bot/update";
             //var webhookAddress = @$"https://webhook.site/391170ec-09ed-4b14-ba5c-ebe8e07857fd";
 
             _logger.LogInformation("Setting webhook: {webhookAddress}", webhookAddress);

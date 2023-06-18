@@ -13,15 +13,9 @@ COPY . .
 WORKDIR "/src/ApplicationAuth"
 RUN dotnet build "ApplicationAuth.csproj" -c Release -o /app/build
 
-# Образ для отладки
-FROM mcr.microsoft.com/dotnet/sdk:5.0 AS debug
-WORKDIR /src
-COPY --from=build /app/build ./
-
-# Установка Chrome и ChromeDriver в контейнере отладки
-USER root
+# Установка Chrome и ChromeDriver
 RUN apt-get update && apt-get install -y wget curl unzip libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1
-RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/94.0.4606.41/chromedriver_linux64.zip
+RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
 RUN unzip /tmp/chromedriver.zip -d /usr/local/bin/
 RUN chmod +x /usr/local/bin/chromedriver
 
@@ -30,7 +24,6 @@ RUN curl -sSL https://dl.google.com/linux/direct/google-chrome-stable_current_am
 RUN dpkg -i /tmp/chrome.deb || apt-get install -y --fix-broken
 RUN apt-get install -y xvfb
 
-# Порт для отладки
 EXPOSE 1312
 
 # Запуск приложения в режиме отладки
