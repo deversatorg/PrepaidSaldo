@@ -41,10 +41,6 @@ namespace ApplicationAuth.Services.Services
             var field = typeof(MemoryCache).GetProperty("EntriesCollection", BindingFlags.NonPublic | BindingFlags.Instance);
             var collection = field.GetValue(_cache) as ICollection;
 
-            //var cacheEntriesCollection = typeof(MemoryCache)
-            //.GetProperty("EntriesCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            //.GetValue(_cache) as ICollection<KeyValuePair<object, object>>;
-
             foreach (var cacheEntry in collection)
             {
                 keyValuePairs.Add(new KeyValuePair<object, object>(cacheEntry.GetType().GetProperty("Key").GetValue(cacheEntry), cacheEntry.GetType().GetProperty("Value").GetValue(cacheEntry)));

@@ -22,6 +22,7 @@ using ApplicationAuth.Models.RequestModels.Saldo;
 using ApplicationAuth.Models.RequestModels;
 using ApplicationAuth.Models.Enums;
 using Microsoft.Bot.Schema.Teams;
+using ApplicationAuth.Common.Constants.Telegram;
 
 namespace ApplicationAuth.Services.Services.Telegram
 {
@@ -87,6 +88,8 @@ namespace ApplicationAuth.Services.Services.Telegram
                 "Профіль👨‍💼" => _coreService.GetProfile(_botClient, message),
                 "Виписка📃" => _coreService.GetHistoryPeriods(_botClient, message),
                 "Видалити" => _coreService.DeleteSaldo(_botClient, message),
+                "Автор✍️" => Author(_botClient, message),
+                "Підтримка📲" => Support(_botClient, message),
                 "Назад" => _coreService.SendInitKeyboard(_botClient, message),
                 "/start" => _coreService.SendInitKeyboard(_botClient, message),
                 "/inline" => SendInlineKeyboard(_botClient, message),
@@ -222,6 +225,35 @@ namespace ApplicationAuth.Services.Services.Telegram
                 return new Message();
                 
             }
+
+            static async Task<Message> Author(ITelegramBotClient bot, Message message) 
+            {
+                const string text = "Привіт! Я автор цього Telegram-бота.\n\n" +
+                    "Я займаюся розробкою програмного забезпечення і створив цього бота для більш зручного перегляду даних з веб-сайту (https://www.prepaidsaldo.com) та надання інформації про стан балансу та історію транзакцій.\n\n" +
+                    "Якщо у вас є будь-які питання, пропозиції або відгуки, не соромтеся зв'язатися зі мною.\n\n" +
+                    "Також, якщо вам сподобався мій бот і ви хочете підтримати мою роботу:\n\n" +
+                    "0xEE9e7123087e3A83E1DC96699506aFA04BddF3F5 - USDT\n\n" +
+                    "4569 3320 0289 2125 - UAH \n\n" +
+                    "Дякую, що використовуєте мого бота, сподіваюся, він буде корисний для вас! 😃👍";
+
+                return await bot.SendTextMessageAsync(chatId: message.Chat.Id, text: text, disableWebPagePreview: true);
+            }
+
+            static async Task<Message> Support(ITelegramBotClient bot, Message message)
+            {
+                const string text = "🆘 Потрібна підтримка? Не хвилюйтесь, я тут, щоб допомогти!\n\n" +
+                    "🤝 Якщо у вас виникли проблеми з моїм ботом, я з радістю допоможу їх вирішити. " +
+                    "@deversatorg - мій профіль в Телеграм.\n\n" +
+                    "⚙️ Я стежу за роботою свого бота і намагаюся забезпечити його найкращу продуктивність. " +
+                    "Але якщо ви виявите будь-які неполадки або маєте пропозиції щодо покращення, будь ласка, " +
+                    "повідомте мене і я зроблю все можливе, щоб ви були задоволені.\n\n" +
+                    "🙏 Дякую вам за використання мого бота і довіру! Ваша зворотна зв'язок та підтримка важливі для мене " +
+                    "і допомагають покращити роботу бота.\n\n" +
+                    "Завжди радий допомогти вам! 🤗";
+
+                return await bot.SendTextMessageAsync(chatId: message.Chat.Id, text: text, disableWebPagePreview: true);
+            }
+
         }
 
         // Process Inline Keyboard callback data
@@ -232,23 +264,35 @@ namespace ApplicationAuth.Services.Services.Telegram
             {
                 "/" + nameof(_coreService.GetTransactionsHistory) => async () =>
                 {
-                    // Извлекаем параметры из callbackQuery.Data
                     var parameters = callbackQuery.Data.Split('?')[1]
                         .Split('&')
                         .Select(param => param.Split('='))
                         .ToDictionary(parts => parts[0], parts => parts[1]);
 
-                    // Получаем необходимые значения из параметров
                     var page = int.Parse(parameters["page"]);
                     var period = parameters["period"];
 
-                    // Вызываем метод для получения истории транзакций
-                    var transactionsHistory = await _coreService.GetTransactionsHistory(_botClient,callbackQuery.Message,new SaldoPaginationRequestModel<SaldoTableColumn>() { CurrentPage = page, Limit = 6, Period = period});
+                    var transactionsHistory = await _coreService.GetTransactionsHistory(_botClient,callbackQuery,new SaldoPaginationRequestModel<SaldoTableColumn>() { CurrentPage = page, Limit = 6, Period = period});
                     
                     return transactionsHistory;
+                },
+
+                "/T" => async () => 
+                {
+                    var parameters = callbackQuery.Data.Split('?')[1]
+                        .Split('&')
+                        .Select(param => param.Split('='))
+                        .ToDictionary(parts => parts[0], parts => parts[1]);
+
+                    var transaction = parameters["t"];
+                    int page = int.Parse(parameters["page"]);
+                    string period = parameters["period"];
+
+                    var response = await _coreService.GetTransaction(_botClient, callbackQuery, transaction, page, period);
+                    return response;
                 }
                 ,
-                _ => null,
+                _ => new Func<Task<Message>>(async () => { return new Message(); }),
                 //TODO: IF unknown command - check states in cache and transist to method;
             };
             Message nessage = await action.Invoke();

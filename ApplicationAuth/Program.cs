@@ -82,7 +82,7 @@ namespace ApplicationAuth
                         options.Listen(IPAddress.Any, 1312, listenOptions =>
                         {
                             //Change before publish
-                            //listenOptions.UseHttps("", "");
+                            listenOptions.UseHttps("/app/certificates/certificate.pfx", "av12010706");
                             listenOptions.UseConnectionLogging();
                         });
                         options.Listen(IPAddress.Any, 1310);

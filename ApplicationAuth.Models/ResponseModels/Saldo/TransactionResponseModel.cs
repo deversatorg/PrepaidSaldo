@@ -12,7 +12,7 @@ namespace ApplicationAuth.Models.ResponseModels.Saldo
         public string Company { get; set; }
         public string Description { get; set; }
         public string TransactionType { get; set; }
-        public string DebitOrCredit { get; set; }
+        public string DebitCredit { get; set; }
         public string Amount { get; set; }
     }
 }

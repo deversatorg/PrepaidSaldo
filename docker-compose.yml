@@ -1,0 +1,14 @@
+version: '3.4'
+
+services:
+  applicationauth:
+    image: ${DOCKER_REGISTRY-}prepaidbot
+    build:
+      context: .
+      dockerfile: ApplicationAuth/Dockerfile
+    ports:
+      - "4200:1312"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__Connection=Data Source=/app/Prepaid.db
+      - CHROME_DRIVER_PATH=/usr/local/bin/chromedriver
